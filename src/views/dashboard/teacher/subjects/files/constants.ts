@@ -7,7 +7,7 @@ export const TYPE_ORDER: IFileType[] = [
 export const TYPE_LABEL: Record<IFileType, string> = {
   de_cuong:          'Đề cương môn học',
   ly_thuyet:         'Tài liệu lý thuyết',
-  ma_tran_cau_hoi:   'Ma trận câu hỏi đề thi',
+  ma_tran_cau_hoi:   'Bảng cấu trúc đề thi',
   ngan_hang_cau_hoi: 'Ngân hàng câu hỏi',
   khac:              'Khác',
 };
