@@ -17,6 +17,8 @@ interface Props {
   onEdit: () => void;
   onSend: () => void;
   onDelete: () => void;
+  onDownload: (url: string, name: string) => void;
+  onTogglePrivate: () => Promise<void>;
   sending: boolean;
 }
 
@@ -143,7 +145,7 @@ const FilePreview: FC<{ file: ISubjectFile }> = ({ file }) => {
     return (
       <div style={{ flex:1, minHeight:0, overflow:'hidden', display:'flex', flexDirection:'column' }}>
         <DocViewer
-          documents={[{ uri: blobUrl!, fileName: name }]}
+          documents={[{ uri: blobUrl!, fileName: name, fileType: extOf(name) }]}
           pluginRenderers={DocViewerRenderers}
           config={{ header: { disableHeader: true, disableFileName: true } }}
           style={{ flex:1, width:'100%' }}
@@ -200,10 +202,16 @@ const RagPipeline: FC<{ file: ISubjectFile }> = ({ file }) => {
 };
 
 // ── Main modal ────────────────────────────────────────────────
-const DetailModal: FC<Props> = ({ file, onClose, onEdit, onSend, onDelete, sending }) => {
+const DetailModal: FC<Props> = ({ file, onClose, onEdit, onSend, onDelete, onDownload, onTogglePrivate, sending }) => {
   const name   = file.original_name ?? '—';
   const hasRag = !!file.external_status;
   const canSendAI = isAiOk(name) && !file.external_status;
+  const [toggling, setToggling] = useState(false);
+
+  const handleTogglePrivate = async () => {
+    setToggling(true);
+    try { await onTogglePrivate(); } finally { setToggling(false); }
+  };
 
   const infoRows = [
     { k:'Loại tài liệu', v: TYPE_LABEL[file.type] },
@@ -286,9 +294,11 @@ const DetailModal: FC<Props> = ({ file, onClose, onEdit, onSend, onDelete, sendi
               )}
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
                 {file.download_url && (
-                  <a href={file.download_url} download style={GRAY_BTN_A}><Download size={13} /> Tải xuống</a>
+                  <button onClick={() => onDownload(file.download_url, name)} style={GRAY_BTN}><Download size={13} /> Tải xuống</button>
                 )}
-                <button style={GRAY_BTN}><EyeOff size={13} /> {file.is_private ? 'Hiện HS' : 'Ẩn HS'}</button>
+                <button onClick={handleTogglePrivate} disabled={toggling} style={GRAY_BTN}>
+                  {toggling ? <Spinner size={13} /> : <EyeOff size={13} />} {file.is_private ? 'Hiện HS' : 'Ẩn HS'}
+                </button>
               </div>
               <button onClick={onDelete} style={RED_BTN}><Trash2 size={13} /> Xóa tài liệu</button>
             </div>
@@ -313,7 +323,6 @@ const DetailModal: FC<Props> = ({ file, onClose, onEdit, onSend, onDelete, sendi
 
 const INDIGO_BTN: React.CSSProperties = { height:40, border:'1px solid #c7d2fe', borderRadius:10, background:'#eef2ff', color:'#4f46e5', fontWeight:700, fontSize:13, fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:7, cursor:'pointer', width:'100%' };
 const GRAY_BTN: React.CSSProperties   = { height:38, border:'1px solid #e7ecf3', borderRadius:10, background:'#fff', color:'#475569', fontWeight:600, fontSize:12.5, fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:6, cursor:'pointer' };
-const GRAY_BTN_A: React.CSSProperties = { ...GRAY_BTN, textDecoration:'none' };
 const RED_BTN: React.CSSProperties    = { height:38, border:'1px solid #fecaca', borderRadius:10, background:'#fff', color:'#dc2626', fontWeight:600, fontSize:12.5, fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:6, cursor:'pointer' };
 
 export default DetailModal;

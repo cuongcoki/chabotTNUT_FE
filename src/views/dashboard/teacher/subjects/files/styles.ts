@@ -108,6 +108,19 @@ const CSS = `
   .tdf-md table{border-collapse:collapse;width:100%;margin:.7em 0;font-size:13px}
   .tdf-md th,.tdf-md td{border:1px solid #e2e8f0;padding:6px 10px;text-align:left}
   .tdf-md th{background:#f8fafc;font-weight:600;color:#334155}
+  .tdf-md [data-line]{cursor:pointer;border-radius:5px;transition:background .15s;}
+  .tdf-md [data-line]:hover{background:rgba(37,99,235,.06);}
+  @keyframes tdf-md-flash{ 0%{background:rgba(37,99,235,.22)} 100%{background:transparent} }
+  .tdf-md-flash{ animation:tdf-md-flash 900ms ease; }
+
+  /* ── Markdown editor: toolbar, line-number gutter, split pane ─ */
+  .tdf-mdsplit { flex:1; min-height:0; display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
+
+  .tdf-mdtool-btn { width:30px; height:30px; flex-shrink:0; border:1px solid transparent; border-radius:8px; background:transparent; color:#64748b; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all .13s; }
+  .tdf-mdtool-btn:hover { background:#eff5ff; color:#2563eb; border-color:#dbeafe; }
+
+  .tdf-mdgutter { flex-shrink:0; width:46px; overflow:hidden; box-sizing:border-box; padding:18px 0; text-align:right; font-family:monospace; font-size:13px; line-height:22px; color:#c2cbd9; background:#fbfcfe; border-right:1px solid #f1f5f9; user-select:none; }
+  .tdf-mdgutter > div { padding-right:10px; white-space:nowrap; }
 
   /* docx-preview reset */
   .docx-wrapper { background:transparent !important; padding:0 !important; }

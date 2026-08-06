@@ -25,7 +25,7 @@ export const fmtNum = (n?: number | null): string =>
 
 export const extOf = (name: string): string => name.split('.').pop()?.toLowerCase() ?? '';
 
-export const isAiOk = (name: string): boolean => /\.(pdf|doc|docx)$/i.test(name);
+export const isAiOk = (name: string): boolean => /\.(pdf|doc|docx|xlsx|xls)$/i.test(name);
 
 export const iconBg = (name: string): { bg: string; color: string } => {
   const e = extOf(name);
@@ -62,27 +62,4 @@ export const downloadWithAuth = (url: string, filename: string, token: string): 
       setTimeout(() => URL.revokeObjectURL(a.href), 100);
     })
     .catch(() => {/* caller should show toast on failure */});
-};
-
-export const md2html = (raw: string): string => {
-  let s = raw.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  s = s.replace(/```[\w]*\n([\s\S]*?)```/gm, (_,c) => `<pre><code>${c}</code></pre>`);
-  s = s.replace(/^\|(.+)\|\n\|[-| :]+\|\n((?:\|.+\|\n?)*)/gm, (_,head,body) => {
-    const ths = head.split('|').filter(Boolean).map((h:string) => `<th>${h.trim()}</th>`).join('');
-    const trs = (body||'').trim().split('\n').filter(Boolean).map((row:string) =>
-      `<tr>${row.split('|').filter(Boolean).map((c:string) => `<td>${c.trim()}</td>`).join('')}</tr>`
-    ).join('');
-    return `<table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>`;
-  });
-  s = s.replace(/^### (.+)$/gm,'<h3>$1</h3>').replace(/^## (.+)$/gm,'<h2>$1</h2>').replace(/^# (.+)$/gm,'<h1>$1</h1>');
-  s = s.replace(/^---$/gm,'<hr>');
-  s = s.replace(/\*\*\*(.+?)\*\*\*/g,'<strong><em>$1</em></strong>').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\*(.+?)\*/g,'<em>$1</em>');
-  s = s.replace(/`([^`\n]+)`/g,'<code>$1</code>');
-  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
-  s = s.replace(/^&gt; (.+)$/gm,'<blockquote>$1</blockquote>');
-  s = s.replace(/((?:^\d+\. .+\n?)+)/gm, m => `<ol>${m.trim().split('\n').map(l=>`<li>${l.replace(/^\d+\. /,'')}</li>`).join('')}</ol>`);
-  s = s.replace(/((?:^- .+\n?)+)/gm, m => `<ul>${m.trim().split('\n').map(l=>`<li>${l.slice(2)}</li>`).join('')}</ul>`);
-  s = s.replace(/\n\n+/g,'</p><p>');
-  if (s && !s.match(/^<(h[1-6]|ul|ol|table|pre|hr|blockquote)/)) s = '<p>' + s + '</p>';
-  return s;
 };

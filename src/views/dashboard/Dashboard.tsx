@@ -1,10 +1,12 @@
-import { type FC, useEffect } from 'react';
+import { type FC, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
-  Users, Loader2, ArrowRight, FileSearch, KeyRound,
+  Users, Loader2, ArrowRight, FileSearch, KeyRound, AlertTriangle,
 } from 'lucide-react';
 import { useManageUsersStore } from './admin/manage_users/stores/user_store';
 import { useUser } from '@/hooks/useUser';
+import AdminApi from '@/infra/admin/admin_api';
+import type { IParseLogStatsInProgress } from '@/infra/api/interfaces/IParseLog';
 import AnalyticsOverviewSection from './admin/analytics/AnalyticsOverviewSection';
 import CvhtStatsSection from './admin/analytics/CvhtStatsSection';
 import KnowledgeMapSection from './admin/analytics/KnowledgeMapSection';
@@ -64,9 +66,17 @@ const Dashboard: FC = () => {
     fetchUsers,
   } = useManageUsersStore();
 
+  const [inProgressStats, setInProgressStats] = useState<IParseLogStatsInProgress | null>(null);
+
   useEffect(() => {
     fetchUsers({ page: 1, per_page: 1 });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    AdminApi.getParseLogStats()
+      .then(res => setInProgressStats(res.data.in_progress))
+      .catch(() => {});
+  }, []);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
@@ -83,6 +93,29 @@ const Dashboard: FC = () => {
           <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: 'rgba(255,255,255,0.82)' }}>{formatDate()}</p>
         </div>
       </div>
+
+      {/* ── Cảnh báo file parse bị treo ── */}
+      {!!inProgressStats?.stuck && (
+        <button
+          onClick={() => navigate('/admin/dashboard/parse-logs?tab=in_progress')}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left', cursor: 'pointer',
+            padding: '14px 18px', borderRadius: 14, border: '1px solid #fecaca',
+            background: 'linear-gradient(120deg,#fef2f2,#fee2e2)', fontFamily: 'inherit',
+          }}
+        >
+          <AlertTriangle size={20} color="#dc2626" style={{ flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p style={{ margin: 0, fontWeight: 800, color: '#991b1b', fontSize: '0.86rem' }}>
+              {inProgressStats.stuck} file đang bị treo khi xử lý (quá 20 phút)
+            </p>
+            <p style={{ margin: '2px 0 0', fontSize: '0.76rem', color: '#b91c1c' }}>
+              Worker xử lý file có thể đã dừng — bấm để xem chi tiết và kiểm tra Supervisor.
+            </p>
+          </div>
+          <ArrowRight size={16} color="#dc2626" style={{ flexShrink: 0 }} />
+        </button>
+      )}
 
       {/* ── Stat cards ── */}
       <div className="ad-stats-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>

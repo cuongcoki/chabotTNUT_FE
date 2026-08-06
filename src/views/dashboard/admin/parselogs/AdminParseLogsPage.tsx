@@ -1,5 +1,6 @@
-import { type FC, useEffect, useRef, useState } from 'react';
-import { FileSearch, RefreshCw, AlertTriangle, CheckCircle2, Loader2, Send, Clock3, X } from 'lucide-react';
+import { type FC, useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router';
+import { FileSearch, RefreshCw, AlertTriangle, CheckCircle2, Loader2, Send, Clock3, X, ListTodo } from 'lucide-react';
 import toast from 'react-hot-toast';
 import HeaderComponent from '@/components/common/header_table';
 import { Button } from '@/components/ui/button';
@@ -23,9 +24,12 @@ import type {
   IParseLogsMeta,
   IParseLogStats,
   IParseLogRecentError,
+  IParseLogInProgress,
+  IParseLogsInProgressMeta,
   ParseLogService,
   ParseLogStatus,
   ParseLogChatbotStatus,
+  ParseLogInProgressStatus,
 } from '@/infra/api/interfaces/IParseLog';
 
 // ── Teacher lookup filter (tìm theo username/tên → chọn để lấy teacher_id) ──
@@ -115,6 +119,19 @@ const CHATBOT_CFG: Record<ParseLogChatbotStatus, { label: string; className: str
   failed:      { label: 'Gửi lỗi',     className: 'bg-red-100 text-red-700' },
 };
 
+const IN_PROGRESS_STATUS_CFG: Record<ParseLogInProgressStatus, { label: string; className: string }> = {
+  pending:    { label: 'Chờ xử lý',  className: 'bg-slate-100 text-slate-600' },
+  processing: { label: 'Đang xử lý', className: 'bg-blue-100 text-blue-700' },
+  failed:     { label: 'Lỗi',        className: 'bg-red-100 text-red-700' },
+};
+
+const fmtElapsed = (s: number) => {
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)} phút`;
+  if (s < 86400) return `${Math.floor(s / 3600)} giờ ${Math.floor((s % 3600) / 60)} phút`;
+  return `${Math.floor(s / 86400)} ngày ${Math.floor((s % 86400) / 3600)} giờ`;
+};
+
 const fmtDt = (iso?: string | null) => {
   if (!iso) return '—';
   return new Intl.DateTimeFormat('vi-VN', {
@@ -149,11 +166,46 @@ const StatCard: FC<{ label: string; value: string | number; icon: React.ReactNod
 const ALL = '__all__';
 
 const AdminParseLogsPage: FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [tab, setTabState] = useState<'done' | 'in_progress'>(
+    searchParams.get('tab') === 'in_progress' ? 'in_progress' : 'done'
+  );
+  const setTab = (t: 'done' | 'in_progress') => {
+    setTabState(t);
+    setSearchParams(prev => {
+      const p = new URLSearchParams(prev);
+      if (t === 'in_progress') p.set('tab', 'in_progress'); else p.delete('tab');
+      return p;
+    }, { replace: true });
+  };
+
   const [logs, setLogs]   = useState<IParseLog[]>([]);
   const [meta, setMeta]   = useState<IParseLogsMeta | null>(null);
   const [stats, setStats] = useState<IParseLogStats | null>(null);
   const [loading, setLoading]     = useState(true);
   const [statsLoading, setStatsLoading] = useState(true);
+
+  // ── File đang xử lý dở (pending/processing/failed) — nguồn "sống" từ SubjectFile ──
+  const [inProgressLogs, setInProgressLogs]     = useState<IParseLogInProgress[]>([]);
+  const [inProgressMeta, setInProgressMeta]     = useState<IParseLogsInProgressMeta | null>(null);
+  const [inProgressLoading, setInProgressLoading] = useState(true);
+  const [inProgressStatus, setInProgressStatus] = useState<ParseLogInProgressStatus | ''>('');
+  const inProgressPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const fetchInProgress = useCallback(() => {
+    AdminApi.getParseLogsInProgress(inProgressStatus ? { status: inProgressStatus } : undefined)
+      .then(res => { setInProgressLogs(res.data ?? []); setInProgressMeta(res.meta ?? null); })
+      .catch(() => toast.error('Không thể tải danh sách file đang xử lý.'))
+      .finally(() => setInProgressLoading(false));
+  }, [inProgressStatus]);
+
+  useEffect(() => {
+    if (tab !== 'in_progress') return;
+    setInProgressLoading(true);
+    fetchInProgress();
+    inProgressPollRef.current = setInterval(fetchInProgress, 12_000);
+    return () => { if (inProgressPollRef.current) clearInterval(inProgressPollRef.current); };
+  }, [tab, fetchInProgress]);
 
   const [status, setStatus]     = useState<ParseLogStatus | ''>('');
   const [service, setService]   = useState<ParseLogService | ''>('');
@@ -231,8 +283,133 @@ const AdminParseLogsPage: FC = () => {
         <StatCard label="Đang chờ / đang gửi RAG" value={statsLoading ? '—' : stats?.chatbot.pending_rag ?? 0} loading={statsLoading} icon={<Clock3 className="w-5 h-5 text-amber-600" />} />
       </div>
 
+      {/* ── Đang xử lý dở (pending/processing/stuck) ───── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+        <StatCard label="Đang chờ xử lý" value={statsLoading ? '—' : stats?.in_progress.pending ?? 0} loading={statsLoading} icon={<Clock3 className="w-5 h-5 text-slate-500" />} />
+        <StatCard label="Đang xử lý" value={statsLoading ? '—' : stats?.in_progress.processing ?? 0} loading={statsLoading} icon={<Loader2 className="w-5 h-5 text-blue-600" />} />
+        <div className={`rounded-xl border p-5 flex items-center gap-4 ${!statsLoading && (stats?.in_progress.stuck ?? 0) > 0 ? 'border-red-300 bg-red-50' : 'border-border bg-card'}`}>
+          <div className={`p-2.5 rounded-lg shrink-0 ${!statsLoading && (stats?.in_progress.stuck ?? 0) > 0 ? 'bg-red-100' : 'bg-[#2F6B3F]/10'}`}>
+            <AlertTriangle className={`w-5 h-5 ${!statsLoading && (stats?.in_progress.stuck ?? 0) > 0 ? 'text-red-600' : 'text-muted-foreground'}`} />
+          </div>
+          <div className="min-w-0">
+            {statsLoading ? <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /> : (
+              <p className={`text-2xl font-bold tabular-nums ${(stats?.in_progress.stuck ?? 0) > 0 ? 'text-red-700' : 'text-foreground'}`}>{stats?.in_progress.stuck ?? 0}</p>
+            )}
+            <p className="text-xs font-medium text-muted-foreground mt-0.5">File bị treo (&gt;20 phút không cập nhật)</p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Tab switcher ──────────────────────────────── */}
+      <div className="inline-flex items-center gap-1 p-1 rounded-lg bg-muted mb-4">
+        <button
+          onClick={() => setTab('done')}
+          className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${tab === 'done' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+        >
+          Đã hoàn tất
+        </button>
+        <button
+          onClick={() => setTab('in_progress')}
+          className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${tab === 'in_progress' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+        >
+          <ListTodo className="w-3.5 h-3.5" /> Đang xử lý
+          {!statsLoading && (stats?.in_progress.stuck ?? 0) > 0 && (
+            <span className="inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-red-600 text-white text-[10px] font-bold">
+              {stats?.in_progress.stuck}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {tab === 'in_progress' && (
+        <>
+          {inProgressMeta && inProgressMeta.stuck > 0 && (
+            <div className="flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 p-4 mb-4">
+              <AlertTriangle className="w-5 h-5 text-red-600 shrink-0" />
+              <div className="text-sm text-red-700">
+                <span className="font-semibold">{inProgressMeta.stuck} file đang bị treo</span> (xử lý quá 20 phút không cập nhật) — worker phía server có thể đã dừng, cần kiểm tra Supervisor.
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-3 mb-4">
+            <Select value={inProgressStatus || ALL} onValueChange={v => setInProgressStatus(v === ALL ? '' : v as ParseLogInProgressStatus)}>
+              <SelectTrigger className="w-52"><SelectValue placeholder="Trạng thái" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>Tất cả (chờ / đang xử lý / lỗi)</SelectItem>
+                <SelectItem value="pending">Đang chờ xử lý</SelectItem>
+                <SelectItem value="processing">Đang xử lý</SelectItem>
+                <SelectItem value="failed">Lỗi</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button variant="outline" size="sm" onClick={() => { setInProgressLoading(true); fetchInProgress(); }}>
+              <RefreshCw className="w-3.5 h-3.5" /> Làm mới
+            </Button>
+            <span className="text-xs text-muted-foreground ml-auto">Tự động làm mới mỗi 12 giây</span>
+          </div>
+
+          <div className="rounded-xl border border-border bg-card overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-10">#</TableHead>
+                  <TableHead>Môn</TableHead>
+                  <TableHead>Giáo viên</TableHead>
+                  <TableHead>File</TableHead>
+                  <TableHead>Dịch vụ</TableHead>
+                  <TableHead>Trạng thái</TableHead>
+                  <TableHead>Thời gian ở trạng thái</TableHead>
+                  <TableHead>Chi tiết lỗi</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {inProgressLoading && inProgressLogs.length === 0 ? (
+                  <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                    <Loader2 className="w-4 h-4 animate-spin inline-block mr-2 align-middle" /> Đang tải...
+                  </TableCell></TableRow>
+                ) : inProgressLogs.length === 0 ? (
+                  <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Không có file nào đang xử lý dở.</TableCell></TableRow>
+                ) : inProgressLogs.map((log, i) => {
+                  const cfg = IN_PROGRESS_STATUS_CFG[log.status];
+                  return (
+                    <TableRow key={log.id} className={log.stuck ? 'bg-red-50/60' : undefined}>
+                      <TableCell className="text-muted-foreground">{i + 1}</TableCell>
+                      <TableCell className="max-w-40">
+                        <div className="font-semibold text-foreground truncate">{log.ten_mon}</div>
+                        <div className="text-xs text-muted-foreground">{log.ma_mon}</div>
+                      </TableCell>
+                      <TableCell className="max-w-36">
+                        <div className="text-foreground truncate">{log.teacher_name}</div>
+                        <div className="text-xs text-muted-foreground truncate">@{log.teacher_username}</div>
+                      </TableCell>
+                      <TableCell className="max-w-56 truncate" title={log.filename}>
+                        {log.filename}
+                        <div className="text-xs text-muted-foreground">{log.type_label} · {fmtSize(log.file_size)}</div>
+                      </TableCell>
+                      <TableCell><Badge variant="secondary">{SERVICE_LABEL[log.service] ?? log.service}</Badge></TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <Badge className={`${cfg.className} border-0`}>{cfg.label}</Badge>
+                          {log.stuck && <Badge className="bg-red-600 text-white border-0">TREO</Badge>}
+                        </div>
+                      </TableCell>
+                      <TableCell className={log.stuck ? 'text-red-600 font-semibold' : 'text-muted-foreground'}>
+                        {fmtElapsed(log.elapsed_seconds)}
+                      </TableCell>
+                      <TableCell className="max-w-56 truncate text-red-600" title={log.error ?? ''}>
+                        {log.error ?? '—'}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </>
+      )}
+
       {/* ── Lỗi gần đây ───────────────────────────────── */}
-      {stats && stats.recent_errors.length > 0 && (
+      {tab === 'done' && stats && stats.recent_errors.length > 0 && (
         <div className="rounded-xl border border-border bg-card p-4 mb-4">
           <h2 className="text-xs font-semibold text-foreground mb-2">Lỗi gần đây</h2>
           <div className="flex flex-col">
@@ -298,6 +475,8 @@ const AdminParseLogsPage: FC = () => {
       </Dialog>
 
       {/* ── Filters ───────────────────────────────────── */}
+      {tab === 'done' && (
+      <>
       <div className="rounded-xl border border-border bg-card p-4 mb-4">
         <div className="flex flex-wrap gap-3">
           <Select value={status || ALL} onValueChange={v => { setStatus(v === ALL ? '' : v as ParseLogStatus); setPage(1); }}>
@@ -415,6 +594,8 @@ const AdminParseLogsPage: FC = () => {
           </div>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 };

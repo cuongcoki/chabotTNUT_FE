@@ -4,6 +4,8 @@ import type {
   IParseLogsQuery,
   IParseLogsResponse,
   IParseLogStatsResponse,
+  IParseLogsInProgressQuery,
+  IParseLogsInProgressResponse,
 } from '@/infra/api/interfaces/IParseLog';
 import type {
   IApiKeySettingResponse,
@@ -39,6 +41,14 @@ class AdminApi {
   async getParseLogStats(): Promise<IParseLogStatsResponse> {
     const res = await axiosInstance.get<IParseLogStatsResponse>(
       API_ENDPOINTS.ADMIN.PARSE_LOGS_STATS
+    );
+    return res.data;
+  }
+
+  async getParseLogsInProgress(query?: IParseLogsInProgressQuery): Promise<IParseLogsInProgressResponse> {
+    const res = await axiosInstance.get<IParseLogsInProgressResponse>(
+      API_ENDPOINTS.ADMIN.PARSE_LOGS_IN_PROGRESS,
+      { params: query }
     );
     return res.data;
   }

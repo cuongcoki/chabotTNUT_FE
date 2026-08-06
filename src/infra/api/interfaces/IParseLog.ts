@@ -101,9 +101,16 @@ export interface IParseLogRecentError {
   created_at:       string;
 }
 
+export interface IParseLogStatsInProgress {
+  pending:    number;
+  processing: number;
+  stuck:      number;
+}
+
 export interface IParseLogStats {
   parse:         IParseLogStatsParse;
   chatbot:       IParseLogStatsChatbot;
+  in_progress:   IParseLogStatsInProgress;
   by_service:    IParseLogStatsByService[];
   by_subject:    IParseLogStatsBySubject[];
   by_teacher:    IParseLogStatsByTeacher[];
@@ -113,4 +120,46 @@ export interface IParseLogStats {
 export interface IParseLogStatsResponse {
   success: boolean;
   data:    IParseLogStats;
+}
+
+// ── In-progress (file đang pending/processing/failed — đọc trực tiếp từ SubjectFile) ──
+export type ParseLogInProgressStatus = 'pending' | 'processing' | 'failed';
+
+export interface IParseLogInProgress {
+  id:               string;
+  ma_mon:           string;
+  ten_mon:          string;
+  teacher_id:       string;
+  teacher_username: string;
+  teacher_name:     string;
+  filename:         string;
+  file_size:        number;
+  type:             string;
+  type_label:       string;
+  service:          ParseLogService;
+  status:           ParseLogInProgressStatus;
+  step:             'parse' | 'send' | null;
+  error:            string | null;
+  elapsed_seconds:  number;
+  stuck:            boolean;
+  updated_at:       string;
+  created_at:       string;
+}
+
+export interface IParseLogsInProgressQuery {
+  status?: ParseLogInProgressStatus;
+}
+
+export interface IParseLogsInProgressMeta {
+  total:      number;
+  pending:    number;
+  processing: number;
+  failed:     number;
+  stuck:      number;
+}
+
+export interface IParseLogsInProgressResponse {
+  success: boolean;
+  data:    IParseLogInProgress[];
+  meta:    IParseLogsInProgressMeta;
 }

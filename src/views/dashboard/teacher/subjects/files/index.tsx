@@ -236,8 +236,38 @@ const TeacherSubjectFiles: FC = () => {
   const openEditMeta = (f: ISubjectFile) => { setSelectedFile(f); setModal('edit'); };
   const openUpload   = (type?: IFileType) => { setUploadType(type); setModal('upload'); };
 
+  // Merge chỉ các field vừa sửa (type/tên/is_private) — không thay cả object bằng
+  // response PATCH, vì endpoint update có thể không trả kèm external_status/chunk_count/...
+  // như endpoint list, dẫn đến mất trạng thái RAG đã có trong state.
+  const mergeFileFields = (id: string, patch: Partial<ISubjectFile>) => {
+    setFiles(prev => prev.map(f => f.id === id ? { ...f, ...patch } : f));
+    setSelectedFile(prev => prev && prev.id === id ? { ...prev, ...patch } : prev);
+  };
+
   const handleEditSuccess = (updated: ISubjectFile) => {
-    setFiles(prev => prev.map(f => f.id === updated.id ? updated : f));
+    mergeFileFields(updated.id, {
+      type: updated.type,
+      type_label: updated.type_label,
+      original_name: updated.original_name,
+      is_private: updated.is_private,
+    });
+  };
+
+  const handleTogglePrivate = async (file: ISubjectFile) => {
+    if (!maMon) return;
+    const nextPrivate = !file.is_private;
+    try {
+      await TeacherApi.updateSubjectFile(maMon, file.id, {
+        type: file.type,
+        is_private: nextPrivate ? '1' : '0',
+        original_name: file.original_name ?? '',
+      });
+      mergeFileFields(file.id, { is_private: nextPrivate });
+      toast.success(nextPrivate ? 'Đã ẩn tài liệu khỏi học sinh.' : 'Đã hiện tài liệu cho học sinh.');
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(msg ?? 'Cập nhật thất bại.');
+    }
   };
 
   const handleDownload = (url: string, name: string) => {
@@ -438,6 +468,8 @@ const TeacherSubjectFiles: FC = () => {
           onEdit={() => setModal('markdown')}
           onSend={() => handleSendToAI(selectedFile.id)}
           onDelete={() => handleDelete(selectedFile.id)}
+          onDownload={handleDownload}
+          onTogglePrivate={() => handleTogglePrivate(selectedFile)}
           sending={!!sending[selectedFile.id]}
         />
       )}

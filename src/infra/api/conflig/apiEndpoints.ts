@@ -22,8 +22,9 @@ export const API_ENDPOINTS = {
     USER_UNBLOCK:  (id: string) => `/admin/users/${id}/unblock`,
 
     // Parse logs
-    PARSE_LOGS:       '/admin/parse-logs',
-    PARSE_LOGS_STATS: '/admin/parse-logs/stats',
+    PARSE_LOGS:             '/admin/parse-logs',
+    PARSE_LOGS_STATS:       '/admin/parse-logs/stats',
+    PARSE_LOGS_IN_PROGRESS: '/admin/parse-logs/in-progress',
 
     // LlamaParse API key (chỉ 1 key duy nhất, không có {id})
     LLAMA_PARSE_KEY:             '/admin/api-settings/llama-parse',
